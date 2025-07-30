@@ -2,7 +2,7 @@ import streamlit as st
 
 # --- Page Config: Tab Title & Icon ---
 st.set_page_config(
-    page_title="Squid: Chain Swaps",
+    page_title="Squid",
     page_icon="https://axelarscan.io/logos/accounts/squid.svg",
     layout="wide"
 )
@@ -12,7 +12,21 @@ st.markdown(
     """
     <div style="display: flex; align-items: center; gap: 15px;">
         <img src="https://axelarscan.io/logos/accounts/squid.svg" alt="Squid Logo" style="width:60px; height:60px;">
-        <h1 style="margin: 0;">Squid: Chain Swaps</h1>
+        <h1 style="margin: 0;">Squid</h1>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# --- Builder Info ---
+st.markdown(
+    """
+    <div style="margin-top: 20px; margin-bottom: 20px; font-size: 16px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="https://pbs.twimg.com/profile_images/1841479747332608000/bindDGZQ_400x400.jpg" alt="Eman Raz" style="width:25px; height:25px; border-radius: 50%;">
+            <span>Built by: <a href="https://x.com/0xeman_raz" target="_blank">Eman Raz</a></span>
+        </div>
+        
     </div>
     """,
     unsafe_allow_html=True
