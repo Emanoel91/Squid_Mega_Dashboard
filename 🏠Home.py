@@ -5,28 +5,146 @@ import plotly.graph_objects as go
 
 
 # =========================================================
-# API
+# PAGE CONFIG
 # =========================================================
 
-BASE_API_URL = "https://www.squidrouter.com/api/analytics/routes"
+st.set_page_config(
+    page_title="Squid",
+    page_icon="https://axelarscan.io/logos/accounts/squid.svg",
+    layout="wide"
+)
 
 
 # =========================================================
-# GET ROUTE DATA
+# CUSTOM BACKGROUND
+# =========================================================
+
+st.markdown("""
+<style>
+
+.stApp {
+    background: linear-gradient(
+        180deg,
+        #E2C6F1 0%,
+        #D1A4E8 100%
+    );
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# =========================================================
+# TITLE WITH LOGO
+# =========================================================
+
+st.markdown(
+    """
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <img
+            src="https://axelarscan.io/logos/accounts/squid.svg"
+            alt="Squid Logo"
+            style="width:60px; height:60px;"
+        >
+        <h1 style="margin: 0;">Squid</h1>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# =========================================================
+# BUILDER INFO
+# =========================================================
+
+st.markdown(
+    """
+    <div style="margin-top: 20px; margin-bottom: 20px; font-size: 16px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+
+            <img
+                src="https://pbs.twimg.com/profile_images/2060406047391559681/sA9zPNKM_400x400.jpg"
+                alt="Eman Raz"
+                style="
+                    width:25px;
+                    height:25px;
+                    border-radius:50%;
+                "
+            >
+
+            <span>
+                Built by:
+                <a
+                    href="https://x.com/0xeman_raz"
+                    target="_blank"
+                >
+                    Eman Raz
+                </a>
+            </span>
+
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# =========================================================
+# SQUID WEBSITE
+# =========================================================
+
+st.markdown(
+    """
+    <div style="font-size: 16px;">
+
+        <div style="
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        ">
+
+            <img
+                src="https://axelarscan.io/logos/accounts/squid.svg"
+                alt="Squid"
+                style="width:20px; height:20px;"
+            >
+
+            <a
+                href="https://www.squidrouter.com/"
+                target="_blank"
+            >
+                Squid Website
+            </a>
+
+        </div>
+
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# =========================================================
+# API CONFIGURATION
+# =========================================================
+
+BASE_API_URL = (
+    "https://www.squidrouter.com/api/analytics/routes"
+)
+
+
+# =========================================================
+# LOAD DATA FROM API
 # =========================================================
 
 @st.cache_data(ttl=300)
 def get_route_data(time_range):
 
-    url = BASE_API_URL
-
-    params = {
-        "range": time_range
-    }
-
     response = requests.get(
-        url,
-        params=params,
+        BASE_API_URL,
+        params={
+            "range": time_range
+        },
         timeout=30
     )
 
@@ -34,32 +152,56 @@ def get_route_data(time_range):
 
     result = response.json()
 
-    return pd.DataFrame(result["data"])
+    if "data" not in result:
+        raise ValueError(
+            "API response does not contain 'data'."
+        )
+
+    df = pd.DataFrame(result["data"])
+
+    return df
 
 
 # =========================================================
-# AGGREGATE CHAIN METRICS
+# CALCULATE CHAIN METRICS
 # =========================================================
 
 def calculate_chain_metrics(df):
 
-    # Make sure volume is numeric
+    df = df.copy()
+
+    # -----------------------------------------------------
+    # Clean data
+    # -----------------------------------------------------
+
     df["volume"] = pd.to_numeric(
         df["volume"],
         errors="coerce"
     ).fillna(0)
 
-    # Normalize chain names
-    df["source"] = df["source"].astype(str).str.lower()
-    df["destination"] = df["destination"].astype(str).str.lower()
+    df["source"] = (
+        df["source"]
+        .astype(str)
+        .str.lower()
+        .str.strip()
+    )
+
+    df["destination"] = (
+        df["destination"]
+        .astype(str)
+        .str.lower()
+        .str.strip()
+    )
 
     # -----------------------------------------------------
-    # Internal transfers
+    # Internal Transfers
     # source == destination
     # -----------------------------------------------------
 
     internal = (
-        df[df["source"] == df["destination"]]
+        df[
+            df["source"] == df["destination"]
+        ]
         .groupby("source")["volume"]
         .sum()
         .rename("Internal Transfer Volume")
@@ -67,11 +209,13 @@ def calculate_chain_metrics(df):
 
     # -----------------------------------------------------
     # Inflow
-    # destination receives funds from another chain
+    # other chain -> chain
     # -----------------------------------------------------
 
     inflow = (
-        df[df["source"] != df["destination"]]
+        df[
+            df["source"] != df["destination"]
+        ]
         .groupby("destination")["volume"]
         .sum()
         .rename("Inflow Volume")
@@ -79,24 +223,26 @@ def calculate_chain_metrics(df):
 
     # -----------------------------------------------------
     # Outflow
-    # source sends funds to another chain
+    # chain -> other chain
     # -----------------------------------------------------
 
     outflow = (
-        df[df["source"] != df["destination"]]
+        df[
+            df["source"] != df["destination"]
+        ]
         .groupby("source")["volume"]
         .sum()
         .rename("Outflow Volume")
     )
 
     # -----------------------------------------------------
-    # All chains
+    # Get all chains
     # -----------------------------------------------------
 
     chains = sorted(
-        set(df["source"]).union(
-            set(df["destination"])
-        )
+        set(df["source"])
+        |
+        set(df["destination"])
     )
 
     metrics = pd.DataFrame(
@@ -115,8 +261,10 @@ def calculate_chain_metrics(df):
 
     metrics["Total Transfer Volume"] = (
         metrics["Inflow Volume"]
-        + metrics["Outflow Volume"]
-        + metrics["Internal Transfer Volume"]
+        +
+        metrics["Outflow Volume"]
+        +
+        metrics["Internal Transfer Volume"]
     )
 
     # -----------------------------------------------------
@@ -125,7 +273,8 @@ def calculate_chain_metrics(df):
 
     metrics["Net Flow"] = (
         metrics["Inflow Volume"]
-        - metrics["Outflow Volume"]
+        -
+        metrics["Outflow Volume"]
     )
 
     metrics.index.name = "Chain"
@@ -136,8 +285,58 @@ def calculate_chain_metrics(df):
 
 
 # =========================================================
-# TIME FILTER
+# NUMBER FORMATTER
 # =========================================================
+
+def format_volume(value, show_sign=False):
+
+    if pd.isna(value):
+        value = 0
+
+    sign = ""
+
+    if show_sign:
+
+        if value > 0:
+            sign = "+"
+
+        elif value < 0:
+            sign = "-"
+
+    value = abs(value)
+
+    if value >= 1_000_000_000:
+
+        formatted = (
+            f"${value / 1_000_000_000:.2f}B"
+        )
+
+    elif value >= 1_000_000:
+
+        formatted = (
+            f"${value / 1_000_000:.2f}M"
+        )
+
+    elif value >= 1_000:
+
+        formatted = (
+            f"${value / 1_000:.2f}K"
+        )
+
+    else:
+
+        formatted = (
+            f"${value:,.0f}"
+        )
+
+    return sign + formatted
+
+
+# =========================================================
+# TIME RANGE FILTER
+# =========================================================
+
+st.markdown("---")
 
 st.markdown(
     "### 📅 Time Range"
@@ -157,17 +356,27 @@ time_range = st.selectbox(
 
 
 # =========================================================
-# LOAD DATA
+# LOAD API DATA
 # =========================================================
 
 try:
 
-    route_df = get_route_data(time_range)
+    route_df = get_route_data(
+        time_range
+    )
+
+except requests.exceptions.RequestException as e:
+
+    st.error(
+        f"Unable to connect to Squid API: {e}"
+    )
+
+    st.stop()
 
 except Exception as e:
 
     st.error(
-        f"Unable to load Squid Analytics API: {e}"
+        f"Unable to process API data: {e}"
     )
 
     st.stop()
@@ -191,20 +400,31 @@ st.markdown(
 )
 
 available_metrics = [
+
     "Inflow Volume",
+
     "Outflow Volume",
+
     "Internal Transfer Volume",
+
     "Total Transfer Volume",
+
     "Net Flow"
 ]
 
+
 selected_metrics = st.multiselect(
+
     "Select metrics to display",
+
     options=available_metrics,
+
     default=[
         "Inflow Volume",
         "Outflow Volume"
-    ]
+    ],
+
+    label_visibility="collapsed"
 )
 
 
@@ -222,13 +442,19 @@ if not selected_metrics:
 # =========================================================
 
 sort_metric = st.selectbox(
+
     "Sort chains by",
+
     options=available_metrics,
+
     index=3
 )
 
+
 chain_metrics = chain_metrics.sort_values(
+
     by=sort_metric,
+
     ascending=False
 )
 
@@ -240,24 +466,24 @@ chain_metrics = chain_metrics.sort_values(
 metric_colors = {
 
     "Inflow Volume":
-        "#16A34A",      # Green
+        "#16A34A",
 
     "Outflow Volume":
-        "#DC2626",      # Red
+        "#DC2626",
 
     "Internal Transfer Volume":
-        "#EAB308",      # Strong Yellow
+        "#EAB308",
 
     "Total Transfer Volume":
-        "#2563EB",      # Blue
+        "#2563EB",
 
     "Net Flow":
-        "#111111"       # Black
+        "#111111"
 }
 
 
 # =========================================================
-# CREATE HORIZONTAL BAR CHART
+# CREATE CHART
 # =========================================================
 
 fig = go.Figure()
@@ -265,36 +491,96 @@ fig = go.Figure()
 
 for metric in selected_metrics:
 
-    values = chain_metrics[metric].copy()
+    # Original values
+    original_values = (
+        chain_metrics[metric]
+        .copy()
+    )
 
     # -----------------------------------------------------
-    # Outflow is displayed as negative
-    # This creates the left/right symmetry
+    # Plot values
     # -----------------------------------------------------
 
     if metric == "Outflow Volume":
 
-        values = -values
+        # Outflow goes to LEFT
+        plot_values = -original_values
+
+    else:
+
+        plot_values = original_values
+
+    # -----------------------------------------------------
+    # Labels
+    # -----------------------------------------------------
+
+    if metric == "Net Flow":
+
+        labels = [
+
+            format_volume(
+                value,
+                show_sign=True
+            )
+
+            for value in original_values
+
+        ]
+
+    else:
+
+        labels = [
+
+            format_volume(
+                value
+            )
+
+            for value in original_values
+
+        ]
+
+    # -----------------------------------------------------
+    # Add trace
+    # -----------------------------------------------------
 
     fig.add_trace(
+
         go.Bar(
 
             y=chain_metrics["Chain"],
 
-            x=values,
+            x=plot_values,
 
             name=metric,
 
             orientation="h",
 
             marker=dict(
-                color=metric_colors[metric]
+
+                color=metric_colors[
+                    metric
+                ]
+
             ),
 
+            text=labels,
+
+            textposition="auto",
+
+            textfont=dict(
+                size=11
+            ),
+
+            customdata=original_values,
+
             hovertemplate=(
+
                 "<b>%{y}</b><br>"
+
                 + metric
-                + ": %{x:,.2f}"
+
+                + ": $%{customdata:,.2f}"
+
                 + "<extra></extra>"
             )
         )
@@ -302,7 +588,7 @@ for metric in selected_metrics:
 
 
 # =========================================================
-# LAYOUT
+# CHART LAYOUT
 # =========================================================
 
 fig.update_layout(
@@ -315,8 +601,14 @@ fig.update_layout(
     ),
 
     title=dict(
-        text=f"Chain Transfer Volume — {time_range.upper()}",
+
+        text=(
+            f"Chain Transfer Volume — "
+            f"{time_range.upper()}"
+        ),
+
         x=0.5,
+
         xanchor="center"
     ),
 
@@ -330,7 +622,7 @@ fig.update_layout(
 
         zerolinecolor="#333333",
 
-        tickformat=",.0f",
+        tickformat="~s",
 
         showgrid=True,
 
@@ -343,9 +635,11 @@ fig.update_layout(
 
         categoryorder="array",
 
-        categoryarray=chain_metrics[
-            "Chain"
-        ].tolist(),
+        categoryarray=(
+            chain_metrics[
+                "Chain"
+            ].tolist()
+        ),
 
         autorange="reversed"
     ),
@@ -368,9 +662,13 @@ fig.update_layout(
     paper_bgcolor="rgba(0,0,0,0)",
 
     margin=dict(
+
         l=20,
+
         r=20,
+
         t=100,
+
         b=40
     ),
 
@@ -379,10 +677,12 @@ fig.update_layout(
 
 
 # =========================================================
-# DISPLAY
+# DISPLAY CHART
 # =========================================================
 
 st.plotly_chart(
+
     fig,
+
     use_container_width=True
 )
