@@ -42,10 +42,14 @@ BASE_API_URL = (
     "https://www.squidrouter.com/api/analytics/routes"
 )
 
-# Public, no-API-key chain metadata source used only to look up
-# each chain's logo (SVG icon). If a chain can't be matched here,
-# the logo is simply left blank for that row.
-CHAIN_LOGO_SOURCE_URL = "https://li.quest/v1/chains"
+# Public chain-logo sources (no API key required). CoinGecko is
+# tried first since it covers the widest range of chains;
+# LI.FI is used only to fill in anything CoinGecko is missing.
+COINGECKO_PLATFORMS_URL = (
+    "https://api.coingecko.com/api/v3/asset_platforms"
+)
+
+LIFI_CHAINS_URL = "https://li.quest/v1/chains"
 
 
 # =========================================================
@@ -82,42 +86,96 @@ def get_route_data(time_range):
 # =========================================================
 
 # Manual aliases for chain names that are spelled/abbreviated
-# differently between the Squid data and the logo source above.
+# differently between the Squid data and the logo sources below.
 # Add more entries here any time a chain doesn't get a logo.
+# Values should match a CoinGecko asset-platform id when possible
+# (see https://api.coingecko.com/api/v3/asset_platforms).
 CHAIN_NAME_ALIASES = {
-    "bsc": "bnb chain",
-    "binance": "bnb chain",
-    "bnb": "bnb chain",
-    "bnb chain": "bnb chain",
+    "bsc": "binance-smart-chain",
+    "binance": "binance-smart-chain",
+    "bnb": "binance-smart-chain",
+    "bnb chain": "binance-smart-chain",
     "avax": "avalanche",
     "eth": "ethereum",
-    "op": "optimism",
-    "optimism mainnet": "optimism",
-    "arb": "arbitrum",
-    "arbitrum one": "arbitrum",
-    "poly": "polygon",
-    "matic": "polygon",
-    "polygon pos": "polygon",
+    "op": "optimistic-ethereum",
+    "optimism": "optimistic-ethereum",
+    "arb": "arbitrum-one",
+    "arbitrum": "arbitrum-one",
+    "poly": "polygon-pos",
+    "matic": "polygon-pos",
+    "polygon": "polygon-pos",
     "ftm": "fantom",
-    "gnosis": "gnosis chain",
-    "xdai": "gnosis chain",
+    "gnosis": "xdai",
+    "xdai": "xdai",
 }
 
 
-@st.cache_data(ttl=86400)
-def get_chain_logo_map():
-    """
-    Builds a {chain_name_lowercase: logo_url} lookup table.
-    Returns an empty dict (never raises) if the source is
-    unreachable, so the chart still renders without logos.
-    """
+def _fetch_coingecko_logo_map():
 
-    logo_map = {}
+    logos = {}
 
     try:
 
         response = requests.get(
-            CHAIN_LOGO_SOURCE_URL,
+            COINGECKO_PLATFORMS_URL,
+            timeout=15
+        )
+
+        response.raise_for_status()
+
+        platforms = response.json()
+
+        for platform in platforms:
+
+            platform_id = str(
+                platform.get("id", "")
+            ).strip().lower()
+
+            name = str(
+                platform.get("name", "")
+            ).strip().lower()
+
+            shortname = str(
+                platform.get("shortname", "")
+            ).strip().lower()
+
+            image = platform.get("image") or {}
+
+            logo = (
+                image.get("small")
+                or image.get("thumb")
+                or image.get("large")
+                or ""
+            )
+
+            if not logo:
+                continue
+
+            if platform_id:
+                logos[platform_id] = logo
+
+            if name:
+                logos[name] = logo
+
+            if shortname:
+                logos[shortname] = logo
+
+    except Exception:
+
+        # Silently fall back — the chart still works without logos.
+        pass
+
+    return logos
+
+
+def _fetch_lifi_logo_map():
+
+    logos = {}
+
+    try:
+
+        response = requests.get(
+            LIFI_CHAINS_URL,
             timeout=15
         )
 
@@ -137,19 +195,39 @@ def get_chain_logo_map():
 
             logo = chain.get("logoURI", "")
 
-            if name and logo:
-                logo_map[name] = logo
+            if not logo:
+                continue
 
-            if key and logo:
-                logo_map[key] = logo
+            if name:
+                logos[name] = logo
+
+            if key:
+                logos[key] = logo
 
     except Exception:
 
-        # Silently fall back to "no logos" — the chart still
-        # works, it just shows plain text labels.
         pass
 
-    return logo_map
+    return logos
+
+
+@st.cache_data(ttl=86400)
+def get_chain_logo_map():
+    """
+    Builds a {chain_name_or_id_lowercase: logo_url} lookup table,
+    combining CoinGecko (primary) with LI.FI (fallback for any
+    chain CoinGecko doesn't have). Never raises — an unreachable
+    source just means fewer/no logos, not a broken chart.
+    """
+
+    combined = _fetch_lifi_logo_map()
+
+    # CoinGecko entries take priority over LI.FI on overlapping keys.
+    combined.update(
+        _fetch_coingecko_logo_map()
+    )
+
+    return combined
 
 
 def find_chain_logo(chain_name, logo_map):
@@ -173,7 +251,8 @@ def find_chain_logo(chain_name, logo_map):
     if alias and alias in logo_map:
         return logo_map[alias]
 
-    # 3) loose match (handles minor naming differences)
+    # 3) loose match (handles minor naming differences,
+    #    e.g. "polygon" vs "polygon-pos")
     for name_key, url in logo_map.items():
 
         if (
