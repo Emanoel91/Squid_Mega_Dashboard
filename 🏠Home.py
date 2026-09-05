@@ -175,7 +175,7 @@ def calculate_chain_metrics(df):
     )
 
     # -----------------------------------------------------
-    # Internal Transfers
+    # Internal Transfer Volume
     # source == destination
     # -----------------------------------------------------
 
@@ -189,7 +189,7 @@ def calculate_chain_metrics(df):
     )
 
     # -----------------------------------------------------
-    # Inflow
+    # Inflow Volume
     # other chain -> chain
     # -----------------------------------------------------
 
@@ -203,7 +203,7 @@ def calculate_chain_metrics(df):
     )
 
     # -----------------------------------------------------
-    # Outflow
+    # Outflow Volume
     # chain -> other chain
     # -----------------------------------------------------
 
@@ -464,7 +464,7 @@ metric_colors = {
 
 
 # =========================================================
-# CREATE CHART
+# CREATE HORIZONTAL BAR CHART
 # =========================================================
 
 fig = go.Figure()
@@ -479,12 +479,11 @@ for metric in selected_metrics:
     )
 
     # -----------------------------------------------------
-    # Plot values
+    # Outflow displayed on the negative side
     # -----------------------------------------------------
 
     if metric == "Outflow Volume":
 
-        # Outflow goes to LEFT
         plot_values = -original_values
 
     else:
@@ -492,7 +491,7 @@ for metric in selected_metrics:
         plot_values = original_values
 
     # -----------------------------------------------------
-    # Labels
+    # Labels displayed on bars
     # -----------------------------------------------------
 
     if metric == "Net Flow":
