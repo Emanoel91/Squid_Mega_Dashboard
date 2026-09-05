@@ -42,6 +42,25 @@ BASE_API_URL = (
     "https://www.squidrouter.com/api/analytics/routes"
 )
 
+# The route-level field that holds the number of transactions for
+# that source/destination pair. The API's exact field name isn't
+# guaranteed, so we auto-detect it from this candidate list (first
+# match wins). If your API uses a different field name, just add
+# it here.
+TRANSACTION_COUNT_FIELD_CANDIDATES = [
+    "txCount",
+    "tx_count",
+    "numTxs",
+    "num_txs",
+    "numTransactions",
+    "num_transactions",
+    "transactionCount",
+    "transaction_count",
+    "transactions",
+    "txs",
+    "count"
+]
+
 # Public chain-logo sources (no API key required). CoinGecko is
 # tried first since it covers the widest range of chains;
 # LI.FI is used only to fill in anything CoinGecko is missing.
@@ -79,6 +98,20 @@ def get_route_data(time_range):
     df = pd.DataFrame(result["data"])
 
     return df
+
+
+def detect_transaction_field(df):
+    """
+    Returns the first column name (from TRANSACTION_COUNT_FIELD_CANDIDATES)
+    that actually exists in the API response, or None if none of them do.
+    """
+
+    for candidate in TRANSACTION_COUNT_FIELD_CANDIDATES:
+
+        if candidate in df.columns:
+            return candidate
+
+    return None
 
 
 # =========================================================
@@ -266,86 +299,80 @@ def find_chain_logo(chain_name, logo_map):
 
 
 # =========================================================
-# CALCULATE CHAIN METRICS
+# CALCULATE CHAIN METRICS (shared core for volume & transactions)
 # =========================================================
 
-def calculate_chain_metrics(df):
+def _aggregate_chain_metrics(df, value_col, names):
+    """
+    Generic inflow/outflow/internal/total/net aggregation over any
+    numeric column (volume, transaction count, etc). `names` maps
+    the logical roles to the output column names to use.
+    """
 
-    df = df.copy()
+    working = df.copy()
 
-    # -----------------------------------------------------
-    # Clean data
-    # -----------------------------------------------------
-
-    df["volume"] = pd.to_numeric(
-        df["volume"],
+    working[value_col] = pd.to_numeric(
+        working[value_col],
         errors="coerce"
     ).fillna(0)
 
-    df["source"] = (
-        df["source"]
+    working["source"] = (
+        working["source"]
         .astype(str)
         .str.lower()
         .str.strip()
     )
 
-    df["destination"] = (
-        df["destination"]
+    working["destination"] = (
+        working["destination"]
         .astype(str)
         .str.lower()
         .str.strip()
     )
 
     # -----------------------------------------------------
-    # Internal Transfer Volume
-    # source == destination
+    # Internal: source == destination
     # -----------------------------------------------------
 
     internal = (
-        df[
-            df["source"] == df["destination"]
+        working[
+            working["source"] == working["destination"]
         ]
-        .groupby("source")["volume"]
+        .groupby("source")[value_col]
         .sum()
-        .rename("Internal Transfer Volume")
+        .rename(names["internal"])
     )
 
     # -----------------------------------------------------
-    # Inflow Volume
-    # other chain -> chain
+    # Inflow: other chain -> chain
     # -----------------------------------------------------
 
     inflow = (
-        df[
-            df["source"] != df["destination"]
+        working[
+            working["source"] != working["destination"]
         ]
-        .groupby("destination")["volume"]
+        .groupby("destination")[value_col]
         .sum()
-        .rename("Inflow Volume")
+        .rename(names["inflow"])
     )
 
     # -----------------------------------------------------
-    # Outflow Volume
-    # chain -> other chain
+    # Outflow: chain -> other chain
     # -----------------------------------------------------
 
     outflow = (
-        df[
-            df["source"] != df["destination"]
+        working[
+            working["source"] != working["destination"]
         ]
-        .groupby("source")["volume"]
+        .groupby("source")[value_col]
         .sum()
-        .rename("Outflow Volume")
+        .rename(names["outflow"])
     )
 
-    # -----------------------------------------------------
-    # Get all chains
-    # -----------------------------------------------------
-
     chains = sorted(
-        set(df["source"])
+        set(working["source"])
         |
-        set(df["destination"])
+        set(working["destination"])
     )
 
     metrics = pd.DataFrame(
@@ -358,40 +385,66 @@ def calculate_chain_metrics(df):
 
     metrics = metrics.fillna(0)
 
-    # -----------------------------------------------------
-    # Total Transfer Volume
-    # -----------------------------------------------------
-
-    metrics["Total Transfer Volume"] = (
-        metrics["Inflow Volume"]
+    metrics[names["total"]] = (
+        metrics[names["inflow"]]
         +
-        metrics["Outflow Volume"]
+        metrics[names["outflow"]]
         +
-        metrics["Internal Transfer Volume"]
+        metrics[names["internal"]]
     )
 
-    # -----------------------------------------------------
-    # Net Flow
-    # -----------------------------------------------------
-
-    metrics["Net Flow"] = (
-        metrics["Inflow Volume"]
+    metrics[names["net"]] = (
+        metrics[names["inflow"]]
         -
-        metrics["Outflow Volume"]
+        metrics[names["outflow"]]
     )
 
     metrics.index.name = "Chain"
 
-    metrics = metrics.reset_index()
+    return metrics.reset_index()
 
-    return metrics
+
+VOLUME_NAMES = {
+    "inflow": "Inflow Volume",
+    "outflow": "Outflow Volume",
+    "internal": "Internal Transfer Volume",
+    "total": "Total Transfer Volume",
+    "net": "Net Flow",
+}
+
+TRANSACTION_NAMES = {
+    "inflow": "Inflow Transaction",
+    "outflow": "Outflow Transaction",
+    "internal": "Internal Transaction",
+    "total": "Total Transaction",
+    "net": "Net Flow Transaction",
+}
+
+
+def calculate_chain_metrics(df):
+
+    return _aggregate_chain_metrics(
+        df,
+        "volume",
+        VOLUME_NAMES
+    )
+
+
+def calculate_chain_transaction_metrics(df, tx_field):
+
+    return _aggregate_chain_metrics(
+        df,
+        tx_field,
+        TRANSACTION_NAMES
+    )
 
 
 # =========================================================
-# NUMBER FORMATTER
+# NUMBER FORMATTERS
 # =========================================================
 
 def format_volume(value, show_sign=False):
+    """Formats a dollar amount, e.g. $1.23M."""
 
     if pd.isna(value):
         value = 0
@@ -435,30 +488,86 @@ def format_volume(value, show_sign=False):
     return sign + formatted
 
 
+def format_count(value, show_sign=False):
+    """Formats a plain (non-currency) count, e.g. 1.23M, 842."""
+
+    if pd.isna(value):
+        value = 0
+
+    sign = ""
+
+    if show_sign:
+
+        if value > 0:
+            sign = "+"
+
+        elif value < 0:
+            sign = "-"
+
+    value = abs(value)
+
+    if value >= 1_000_000_000:
+
+        formatted = (
+            f"{value / 1_000_000_000:.2f}B"
+        )
+
+    elif value >= 1_000_000:
+
+        formatted = (
+            f"{value / 1_000_000:.2f}M"
+        )
+
+    elif value >= 1_000:
+
+        formatted = (
+            f"{value / 1_000:.2f}K"
+        )
+
+    else:
+
+        formatted = (
+            f"{value:,.0f}"
+        )
+
+    return sign + formatted
+
+
 # =========================================================
-# METRIC DISPLAY CONFIG (shared by table + charts)
+# METRIC / CHART DISPLAY CONFIG
 # =========================================================
 
-METRIC_COLUMNS = [
-    "Inflow Volume",
-    "Outflow Volume",
-    "Internal Transfer Volume",
-    "Total Transfer Volume",
-    "Net Flow"
-]
+POSITIVE_COLOR = "#16A34A"
+NEGATIVE_COLOR = "#DC2626"
+NEUTRAL_TEXT_COLOR = "#111111"
 
-# Single bar color per metric. Net Flow is handled separately
-# (colored per-bar by sign), so it has no fixed color here.
-METRIC_COLORS = {
+# Bar color per volume metric (Net Flow is colored by sign instead).
+VOLUME_METRIC_COLORS = {
     "Inflow Volume": "#16A34A",
     "Outflow Volume": "#DC2626",
     "Internal Transfer Volume": "#EAB308",
     "Total Transfer Volume": "#2563EB",
 }
 
-POSITIVE_COLOR = "#16A34A"
-NEGATIVE_COLOR = "#DC2626"
-NEUTRAL_TEXT_COLOR = "#111111"
+# Bar color per transaction metric (Net Flow Transaction is colored
+# by sign instead).
+TRANSACTION_METRIC_COLORS = {
+    "Inflow Transaction": "#16A34A",
+    "Outflow Transaction": "#DC2626",
+    "Internal Transaction": "#EAB308",
+    "Total Transaction": "#2563EB",
+}
+
+# Each row below pairs a volume metric with its transaction-count
+# counterpart: left chart = top 10 by volume metric,
+# right chart = top 10 by the matching transaction metric.
+ROW_METRIC_PAIRS = [
+    ("Inflow Volume", "Inflow Transaction"),
+    ("Outflow Volume", "Outflow Transaction"),
+    ("Net Flow", "Net Flow Transaction"),
+    ("Total Transfer Volume", "Total Transaction"),
+    ("Internal Transfer Volume", "Internal Transaction"),
+]
 
 
 # =========================================================
@@ -519,44 +628,43 @@ chain_metrics = calculate_chain_metrics(
     route_df
 )
 
+transaction_field = detect_transaction_field(
+    route_df
+)
+
+if transaction_field is None:
+
+    st.warning(
+        "ستون شمارش تراکنش در پاسخ API پیدا نشد "
+        "(نام‌های بررسی‌شده: "
+        f"{', '.join(TRANSACTION_COUNT_FIELD_CANDIDATES)}). "
+        "فعلاً هر ردیف از داده به‌عنوان ۱ تراکنش شمرده شده؛ "
+        "برای دقت کامل، نام واقعی این ستون را به "
+        "TRANSACTION_COUNT_FIELD_CANDIDATES در بالای کد اضافه کنید."
+    )
+
+    route_df_for_tx = route_df.copy()
+
+    route_df_for_tx["_tx_count_fallback"] = 1
+
+    transaction_field = "_tx_count_fallback"
+
+else:
+
+    route_df_for_tx = route_df
+
+
+chain_tx_metrics = calculate_chain_transaction_metrics(
+    route_df_for_tx,
+    transaction_field
+)
+
 chain_logo_map = get_chain_logo_map()
 
 
 # =========================================================
-# FULL METRICS TABLE
+# SHARED TABLE-STYLING HELPERS
 # =========================================================
-
-st.markdown(
-    "### 📋 All Chains — Full Metrics"
-)
-
-table_df = chain_metrics.copy()
-
-# Look up logos BEFORE re-casing the chain name for display,
-# since the logo lookup expects the original (lowercase) name.
-table_df["Logo"] = table_df["Chain"].apply(
-    lambda c: find_chain_logo(c, chain_logo_map)
-)
-
-table_df["Chain"] = table_df["Chain"].str.title()
-
-table_df = table_df[
-    [
-        "Logo",
-        "Chain",
-        "Inflow Volume",
-        "Outflow Volume",
-        "Internal Transfer Volume",
-        "Total Transfer Volume",
-        "Net Flow"
-    ]
-]
-
-table_df = table_df.sort_values(
-    by="Total Transfer Volume",
-    ascending=False
-).reset_index(drop=True)
-
 
 def _style_net_flow(value):
 
@@ -574,68 +682,154 @@ def _style_neutral(value):
     return f"color: {NEUTRAL_TEXT_COLOR};"
 
 
-table_styler = table_df.style.format(
-    {
-        "Inflow Volume": lambda v: format_volume(v),
-        "Outflow Volume": lambda v: format_volume(v),
-        "Internal Transfer Volume": lambda v: format_volume(v),
-        "Total Transfer Volume": lambda v: format_volume(v),
-        "Net Flow": lambda v: format_volume(v, show_sign=True),
+def _apply_cell_style(styler, style_fn, subset):
+    """
+    pandas >= 2.1 renamed Styler.applymap to Styler.map (and pandas 3.x
+    removed applymap entirely), so pick whichever this environment has.
+    """
+
+    style_method = getattr(styler, "map", None) or styler.applymap
+
+    return style_method(
+        style_fn,
+        subset=subset
+    )
+
+
+def render_metrics_table(
+    metrics_df,
+    logo_map,
+    value_columns,
+    net_flow_column,
+    sort_column,
+    value_formatter
+):
+
+    table_df = metrics_df.copy()
+
+    # Look up logos BEFORE re-casing the chain name for display,
+    # since the logo lookup expects the original (lowercase) name.
+    table_df["Logo"] = table_df["Chain"].apply(
+        lambda c: find_chain_logo(c, logo_map)
+    )
+
+    table_df["Chain"] = table_df["Chain"].str.title()
+
+    ordered_columns = ["Logo", "Chain"] + value_columns
+
+    table_df = table_df[ordered_columns]
+
+    table_df = table_df.sort_values(
+        by=sort_column,
+        ascending=False
+    ).reset_index(drop=True)
+
+    format_map = {
+        col: (
+            (lambda v: value_formatter(v, show_sign=True))
+            if col == net_flow_column
+            else (lambda v: value_formatter(v))
+        )
+        for col in value_columns
     }
+
+    styler = table_df.style.format(format_map)
+
+    styler = _apply_cell_style(
+        styler,
+        _style_net_flow,
+        subset=[net_flow_column]
+    )
+
+    other_columns = [
+        col for col in value_columns
+        if col != net_flow_column
+    ]
+
+    styler = _apply_cell_style(
+        styler,
+        _style_neutral,
+        subset=other_columns
+    )
+
+    st.dataframe(
+        styler,
+        column_config={
+            "Logo": st.column_config.ImageColumn(
+                "Logo",
+                width="small"
+            ),
+            "Chain": st.column_config.TextColumn(
+                "Chain"
+            )
+        },
+        hide_index=True,
+        use_container_width=True
+    )
+
+
+# =========================================================
+# TABLE 1 — FULL METRICS (VOLUME)
+# =========================================================
+
+st.markdown(
+    "### 📋 All Chains — Full Metrics"
 )
 
-# pandas >= 2.1 renamed Styler.applymap to Styler.map (and pandas 3.x
-# removed applymap entirely), so pick whichever this environment has.
-_style_cell = getattr(
-    table_styler,
-    "map",
-    None
-) or table_styler.applymap
-
-table_styler = _style_cell(
-    _style_net_flow,
-    subset=["Net Flow"]
-)
-
-_style_cell = getattr(
-    table_styler,
-    "map",
-    None
-) or table_styler.applymap
-
-table_styler = _style_cell(
-    _style_neutral,
-    subset=[
+render_metrics_table(
+    chain_metrics,
+    chain_logo_map,
+    value_columns=[
         "Inflow Volume",
         "Outflow Volume",
         "Internal Transfer Volume",
-        "Total Transfer Volume"
-    ]
-)
-
-st.dataframe(
-    table_styler,
-    column_config={
-        "Logo": st.column_config.ImageColumn(
-            "Logo",
-            width="small"
-        ),
-        "Chain": st.column_config.TextColumn(
-            "Chain"
-        )
-    },
-    hide_index=True,
-    use_container_width=True
+        "Total Transfer Volume",
+        "Net Flow"
+    ],
+    net_flow_column="Net Flow",
+    sort_column="Total Transfer Volume",
+    value_formatter=format_volume
 )
 
 
 # =========================================================
-# TOP 10 / BOTTOM 10 BAR CHART BUILDER
+# TABLE 2 — FULL METRICS (TRANSACTIONS)
 # =========================================================
 
-def build_ranked_bar_chart(sub_df, metric, chart_title, logo_map, bar_color=None):
+st.markdown(
+    "### 📋 All Chains — Full Metrics (Transactions)"
+)
+
+render_metrics_table(
+    chain_tx_metrics,
+    chain_logo_map,
+    value_columns=[
+        "Inflow Transaction",
+        "Outflow Transaction",
+        "Internal Transaction",
+        "Total Transaction",
+        "Net Flow Transaction"
+    ],
+    net_flow_column="Net Flow Transaction",
+    sort_column="Total Transaction",
+    value_formatter=format_count
+)
+
+
+# =========================================================
+# TOP 10 BAR CHART BUILDER
+# =========================================================
+
+def build_ranked_bar_chart(
+    sub_df,
+    metric,
+    chart_title,
+    logo_map,
+    bar_color,
+    value_formatter
+):
     """
-    Vertical bar chart for a small set of chains (top or bottom N).
+    Vertical bar chart for a small set of chains (e.g. top 10).
     Each x-axis position shows either the chain's logo (if found)
     or its name as text — never both.
     """
@@ -649,19 +843,19 @@ def build_ranked_bar_chart(sub_df, metric, chart_title, logo_map, bar_color=None
         for chain in chains
     ]
 
-    show_sign = (metric == "Net Flow")
+    show_sign = metric.startswith("Net Flow")
 
     value_labels = [
-        format_volume(v, show_sign=show_sign)
+        value_formatter(v, show_sign=show_sign)
         for v in values
     ]
 
     hover_labels = [
-        f"{chain.title()}<br>{metric}: {format_volume(v, show_sign=show_sign)}"
+        f"{chain.title()}<br>{metric}: {value_formatter(v, show_sign=show_sign)}"
         for chain, v in zip(chains, values)
     ]
 
-    if metric == "Net Flow":
+    if show_sign:
 
         bar_colors = [
             POSITIVE_COLOR if v >= 0 else NEGATIVE_COLOR
@@ -783,71 +977,81 @@ def build_ranked_bar_chart(sub_df, metric, chart_title, logo_map, bar_color=None
     return fig
 
 
-def render_top_bottom_row(metric, chain_metrics_df, logo_map, n=10):
+def render_top_pair_row(
+    volume_metric,
+    transaction_metric,
+    volume_df,
+    transaction_df,
+    logo_map,
+    n=10
+):
 
-    bar_color = METRIC_COLORS.get(metric)
+    vol_color = VOLUME_METRIC_COLORS.get(volume_metric)
 
-    top_df = chain_metrics_df.nlargest(
+    tx_color = TRANSACTION_METRIC_COLORS.get(transaction_metric)
+
+    top_volume_df = volume_df.nlargest(
         n,
-        metric
+        volume_metric
     ).reset_index(drop=True)
 
-    bottom_df = chain_metrics_df.nsmallest(
+    top_tx_df = transaction_df.nlargest(
         n,
-        metric
-    ).sort_values(
-        metric,
-        ascending=True
+        transaction_metric
     ).reset_index(drop=True)
 
-    col_top, col_bottom = st.columns(2)
+    col_left, col_right = st.columns(2)
 
-    with col_top:
+    with col_left:
 
-        fig_top = build_ranked_bar_chart(
-            top_df,
-            metric,
-            f"Top 10 — {metric}",
+        fig_volume = build_ranked_bar_chart(
+            top_volume_df,
+            volume_metric,
+            f"Top 10 — {volume_metric}",
             logo_map,
-            bar_color=bar_color
+            bar_color=vol_color,
+            value_formatter=format_volume
         )
 
         st.plotly_chart(
-            fig_top,
+            fig_volume,
             use_container_width=True
         )
 
-    with col_bottom:
+    with col_right:
 
-        fig_bottom = build_ranked_bar_chart(
-            bottom_df,
-            metric,
-            f"Bottom 10 — {metric}",
+        fig_tx = build_ranked_bar_chart(
+            top_tx_df,
+            transaction_metric,
+            f"Top 10 — {transaction_metric}",
             logo_map,
-            bar_color=bar_color
+            bar_color=tx_color,
+            value_formatter=format_count
         )
 
         st.plotly_chart(
-            fig_bottom,
+            fig_tx,
             use_container_width=True
         )
 
 
 # =========================================================
-# TOP 10 / BOTTOM 10 ROWS — ONE ROW PER METRIC
+# TOP 10 ROWS — VOLUME METRIC PAIRED WITH ITS TRANSACTION METRIC
 # =========================================================
 
 st.markdown("---")
 
 st.markdown(
-    "### 🏆 Top & Bottom Chains by Metric"
+    "### 🏆 Top 10 Chains by Metric"
 )
 
-for metric in METRIC_COLUMNS:
+for volume_metric, transaction_metric in ROW_METRIC_PAIRS:
 
-    render_top_bottom_row(
-        metric,
+    render_top_pair_row(
+        volume_metric,
+        transaction_metric,
         chain_metrics,
+        chain_tx_metrics,
         chain_logo_map,
         n=10
     )
