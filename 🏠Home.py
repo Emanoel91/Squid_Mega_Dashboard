@@ -42,6 +42,11 @@ BASE_API_URL = (
     "https://www.squidrouter.com/api/analytics/routes"
 )
 
+# Public, no-API-key chain metadata source used only to look up
+# each chain's logo (SVG icon). If a chain can't be matched here,
+# the logo is simply left blank for that row.
+CHAIN_LOGO_SOURCE_URL = "https://li.quest/v1/chains"
+
 
 # =========================================================
 # LOAD DATA FROM API
@@ -70,6 +75,115 @@ def get_route_data(time_range):
     df = pd.DataFrame(result["data"])
 
     return df
+
+
+# =========================================================
+# LOAD CHAIN LOGOS
+# =========================================================
+
+# Manual aliases for chain names that are spelled/abbreviated
+# differently between the Squid data and the logo source above.
+# Add more entries here any time a chain doesn't get a logo.
+CHAIN_NAME_ALIASES = {
+    "bsc": "bnb chain",
+    "binance": "bnb chain",
+    "bnb": "bnb chain",
+    "bnb chain": "bnb chain",
+    "avax": "avalanche",
+    "eth": "ethereum",
+    "op": "optimism",
+    "optimism mainnet": "optimism",
+    "arb": "arbitrum",
+    "arbitrum one": "arbitrum",
+    "poly": "polygon",
+    "matic": "polygon",
+    "polygon pos": "polygon",
+    "ftm": "fantom",
+    "gnosis": "gnosis chain",
+    "xdai": "gnosis chain",
+}
+
+
+@st.cache_data(ttl=86400)
+def get_chain_logo_map():
+    """
+    Builds a {chain_name_lowercase: logo_url} lookup table.
+    Returns an empty dict (never raises) if the source is
+    unreachable, so the chart still renders without logos.
+    """
+
+    logo_map = {}
+
+    try:
+
+        response = requests.get(
+            CHAIN_LOGO_SOURCE_URL,
+            timeout=15
+        )
+
+        response.raise_for_status()
+
+        chains_data = response.json().get("chains", [])
+
+        for chain in chains_data:
+
+            name = str(
+                chain.get("name", "")
+            ).strip().lower()
+
+            key = str(
+                chain.get("key", "")
+            ).strip().lower()
+
+            logo = chain.get("logoURI", "")
+
+            if name and logo:
+                logo_map[name] = logo
+
+            if key and logo:
+                logo_map[key] = logo
+
+    except Exception:
+
+        # Silently fall back to "no logos" — the chart still
+        # works, it just shows plain text labels.
+        pass
+
+    return logo_map
+
+
+def find_chain_logo(chain_name, logo_map):
+    """
+    Looks up a logo URL for a given chain name.
+    Returns "" (empty) when no confident match is found.
+    """
+
+    key = str(chain_name).strip().lower()
+
+    if not key:
+        return ""
+
+    # 1) exact match
+    if key in logo_map:
+        return logo_map[key]
+
+    # 2) known alias match
+    alias = CHAIN_NAME_ALIASES.get(key)
+
+    if alias and alias in logo_map:
+        return logo_map[alias]
+
+    # 3) loose match (handles minor naming differences)
+    for name_key, url in logo_map.items():
+
+        if (
+            name_key.startswith(key)
+            or key.startswith(name_key)
+        ):
+            return url
+
+    # Not found -> leave empty on purpose
+    return ""
 
 
 # =========================================================
@@ -300,6 +414,8 @@ chain_metrics = calculate_chain_metrics(
     route_df
 )
 
+chain_logo_map = get_chain_logo_map()
+
 
 # =========================================================
 # METRIC SELECTION
@@ -500,6 +616,10 @@ for metric in selected_metrics:
 # CHART LAYOUT
 # =========================================================
 
+# Extra left margin to make room for the chain logos that get
+# drawn to the left of the y-axis tick labels below.
+LEFT_MARGIN_PX = 170
+
 fig.update_layout(
 
     barmode="group",
@@ -550,7 +670,11 @@ fig.update_layout(
             ].tolist()
         ),
 
-        autorange="reversed"
+        autorange="reversed",
+
+        # Push tick labels away from the axis line so the
+        # logo images (placed further left) don't overlap them.
+        ticksuffix="   "
     ),
 
     legend=dict(
@@ -572,7 +696,7 @@ fig.update_layout(
 
     margin=dict(
 
-        l=20,
+        l=LEFT_MARGIN_PX,
 
         r=20,
 
@@ -583,6 +707,56 @@ fig.update_layout(
 
     hovermode="closest"
 )
+
+
+# =========================================================
+# ADD CHAIN LOGOS NEXT TO CHAIN NAMES
+# =========================================================
+
+# Plotly can't embed images directly inside axis tick labels,
+# so each logo is drawn as a small floating image anchored to
+# its chain's row on the y-axis (yref="y") and positioned in
+# the left margin using paper coordinates (xref="paper").
+
+LOGO_SIZE_FRACTION = 0.035   # width, as a fraction of plot width
+LOGO_X_POSITION = -0.02      # just left of the plot area (paper coords)
+
+for chain_name in chain_metrics["Chain"]:
+
+    logo_url = find_chain_logo(
+        chain_name,
+        chain_logo_map
+    )
+
+    if not logo_url:
+        # No matching logo found -> leave it empty, as requested
+        continue
+
+    fig.add_layout_image(
+
+        dict(
+
+            source=logo_url,
+
+            xref="paper",
+
+            yref="y",
+
+            x=LOGO_X_POSITION,
+
+            y=chain_name,
+
+            sizex=LOGO_SIZE_FRACTION,
+
+            sizey=0.8,
+
+            xanchor="right",
+
+            yanchor="middle",
+
+            layer="above"
+        )
+    )
 
 
 # =========================================================
