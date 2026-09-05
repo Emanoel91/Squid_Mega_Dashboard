@@ -1,4 +1,5 @@
 import streamlit as st
+import textwrap
 
 # --- Page Config ---
 st.set_page_config(
@@ -7,12 +8,15 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Custom Background ---
+# =========================================================
+# CUSTOM CSS
+# =========================================================
+
 st.markdown(
-    """
+    textwrap.dedent("""
     <style>
 
-    /* Main dashboard background */
+    /* Main App Background */
     .stApp {
         background: linear-gradient(
             180deg,
@@ -23,12 +27,12 @@ st.markdown(
         );
     }
 
-    /* Main content area */
+    /* Make main content transparent */
     .main {
         background: transparent;
     }
 
-    /* Header */
+    /* Streamlit Header */
     header[data-testid="stHeader"] {
         background: transparent;
     }
@@ -39,47 +43,60 @@ st.markdown(
     }
 
     </style>
-    """,
+    """),
     unsafe_allow_html=True
 )
 
 
-# --- Title with Logo ---
+# =========================================================
+# TITLE
+# =========================================================
+
 st.markdown(
-    """
+    textwrap.dedent("""
     <div style="
         display: flex;
         align-items: center;
         gap: 15px;
     ">
+
         <img
             src="https://axelarscan.io/logos/accounts/squid.svg"
             alt="Squid Logo"
-            style="width:60px; height:60px;"
+            style="
+                width:60px;
+                height:60px;
+            "
         >
 
         <h1 style="margin: 0;">
             Squid
         </h1>
+
     </div>
-    """,
+    """),
     unsafe_allow_html=True
 )
 
 
-# --- Builder Info ---
+# =========================================================
+# BUILDER INFO
+# =========================================================
+
 st.markdown(
-    """
+    textwrap.dedent("""
     <div style="
         margin-top: 20px;
         margin-bottom: 20px;
         font-size: 16px;
     ">
+
         <div style="
             display: flex;
             align-items: center;
             gap: 10px;
         ">
+
             <img
                 src="https://pbs.twimg.com/profile_images/2060406047391559681/sA9zPNKM_400x400.jpg"
                 alt="Eman Raz"
@@ -92,37 +109,57 @@ st.markdown(
 
             <span>
                 Built by:
-                <a href="https://x.com/0xeman_raz" target="_blank">
+                <a
+                    href="https://x.com/0xeman_raz"
+                    target="_blank"
+                >
                     Eman Raz
                 </a>
             </span>
+
         </div>
+
     </div>
-    """,
+    """),
     unsafe_allow_html=True
 )
 
 
-# --- Links with Logos ---
+# =========================================================
+# SQUID WEBSITE
+# =========================================================
+
 st.markdown(
-    """
-    <div style="font-size: 16px;">
+    textwrap.dedent("""
+    <div style="
+        font-size: 16px;
+    ">
+
         <div style="
             display: flex;
             align-items: center;
             gap: 10px;
         ">
+
             <img
                 src="https://axelarscan.io/logos/accounts/squid.svg"
                 alt="Squid"
-                style="width:20px; height:20px;"
+                style="
+                    width:20px;
+                    height:20px;
+                "
             >
 
-            <a href="https://www.squidrouter.com/" target="_blank">
+            <a
+                href="https://www.squidrouter.com/"
+                target="_blank"
+            >
                 Squid Website
             </a>
+
         </div>
+
     </div>
-    """,
+    """),
     unsafe_allow_html=True
 )
