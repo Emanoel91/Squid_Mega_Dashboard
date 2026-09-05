@@ -162,7 +162,7 @@ def _fetch_coingecko_logo_map():
 
     except Exception:
 
-        # Silently fall back — the chart still works without logos.
+        # Silently fall back — the dashboard still works without logos.
         pass
 
     return logos
@@ -217,7 +217,7 @@ def get_chain_logo_map():
     Builds a {chain_name_or_id_lowercase: logo_url} lookup table,
     combining CoinGecko (primary) with LI.FI (fallback for any
     chain CoinGecko doesn't have). Never raises — an unreachable
-    source just means fewer/no logos, not a broken chart.
+    source just means fewer/no logos, not a broken dashboard.
     """
 
     combined = _fetch_lifi_logo_map()
@@ -436,6 +436,32 @@ def format_volume(value, show_sign=False):
 
 
 # =========================================================
+# METRIC DISPLAY CONFIG (shared by table + charts)
+# =========================================================
+
+METRIC_COLUMNS = [
+    "Inflow Volume",
+    "Outflow Volume",
+    "Internal Transfer Volume",
+    "Total Transfer Volume",
+    "Net Flow"
+]
+
+# Single bar color per metric. Net Flow is handled separately
+# (colored per-bar by sign), so it has no fixed color here.
+METRIC_COLORS = {
+    "Inflow Volume": "#16A34A",
+    "Outflow Volume": "#DC2626",
+    "Internal Transfer Volume": "#EAB308",
+    "Total Transfer Volume": "#2563EB",
+}
+
+POSITIVE_COLOR = "#16A34A"
+NEGATIVE_COLOR = "#DC2626"
+NEUTRAL_TEXT_COLOR = "#111111"
+
+
+# =========================================================
 # TIME RANGE FILTER
 # =========================================================
 
@@ -486,7 +512,7 @@ except Exception as e:
 
 
 # =========================================================
-# CALCULATE METRICS
+# CALCULATE METRICS + LOGOS
 # =========================================================
 
 chain_metrics = calculate_chain_metrics(
@@ -497,354 +523,331 @@ chain_logo_map = get_chain_logo_map()
 
 
 # =========================================================
-# METRIC SELECTION
+# FULL METRICS TABLE
 # =========================================================
 
 st.markdown(
-    "### 📊 Chain Transfer Analytics"
+    "### 📋 All Chains — Full Metrics"
 )
 
-available_metrics = [
+table_df = chain_metrics.copy()
 
-    "Inflow Volume",
+# Look up logos BEFORE re-casing the chain name for display,
+# since the logo lookup expects the original (lowercase) name.
+table_df["Logo"] = table_df["Chain"].apply(
+    lambda c: find_chain_logo(c, chain_logo_map)
+)
 
-    "Outflow Volume",
+table_df["Chain"] = table_df["Chain"].str.title()
 
-    "Internal Transfer Volume",
-
-    "Total Transfer Volume",
-
-    "Net Flow"
+table_df = table_df[
+    [
+        "Logo",
+        "Chain",
+        "Inflow Volume",
+        "Outflow Volume",
+        "Internal Transfer Volume",
+        "Total Transfer Volume",
+        "Net Flow"
+    ]
 ]
 
-
-selected_metrics = st.multiselect(
-
-    "Select metrics to display",
-
-    options=available_metrics,
-
-    default=[
-        "Inflow Volume",
-        "Outflow Volume"
-    ],
-
-    label_visibility="collapsed"
-)
-
-
-if not selected_metrics:
-
-    st.info(
-        "Please select at least one metric."
-    )
-
-    st.stop()
-
-
-# =========================================================
-# SORTING
-# =========================================================
-
-sort_metric = st.selectbox(
-
-    "Sort chains by",
-
-    options=available_metrics,
-
-    index=3
-)
-
-
-chain_metrics = chain_metrics.sort_values(
-
-    by=sort_metric,
-
+table_df = table_df.sort_values(
+    by="Total Transfer Volume",
     ascending=False
+).reset_index(drop=True)
+
+
+def _style_net_flow(value):
+
+    if value > 0:
+        return f"color: {POSITIVE_COLOR}; font-weight: 600;"
+
+    elif value < 0:
+        return f"color: {NEGATIVE_COLOR}; font-weight: 600;"
+
+    return f"color: {NEUTRAL_TEXT_COLOR};"
+
+
+def _style_neutral(value):
+
+    return f"color: {NEUTRAL_TEXT_COLOR};"
+
+
+table_styler = table_df.style.format(
+    {
+        "Inflow Volume": lambda v: format_volume(v),
+        "Outflow Volume": lambda v: format_volume(v),
+        "Internal Transfer Volume": lambda v: format_volume(v),
+        "Total Transfer Volume": lambda v: format_volume(v),
+        "Net Flow": lambda v: format_volume(v, show_sign=True),
+    }
+)
+
+# pandas >= 2.1 renamed Styler.applymap to Styler.map (and pandas 3.x
+# removed applymap entirely), so pick whichever this environment has.
+_style_cell = getattr(
+    table_styler,
+    "map",
+    None
+) or table_styler.applymap
+
+table_styler = _style_cell(
+    _style_net_flow,
+    subset=["Net Flow"]
+)
+
+_style_cell = getattr(
+    table_styler,
+    "map",
+    None
+) or table_styler.applymap
+
+table_styler = _style_cell(
+    _style_neutral,
+    subset=[
+        "Inflow Volume",
+        "Outflow Volume",
+        "Internal Transfer Volume",
+        "Total Transfer Volume"
+    ]
+)
+
+st.dataframe(
+    table_styler,
+    column_config={
+        "Logo": st.column_config.ImageColumn(
+            "Logo",
+            width="small"
+        ),
+        "Chain": st.column_config.TextColumn(
+            "Chain"
+        )
+    },
+    hide_index=True,
+    use_container_width=True
 )
 
 
 # =========================================================
-# COLORS
+# TOP 10 / BOTTOM 10 BAR CHART BUILDER
 # =========================================================
 
-metric_colors = {
+def build_ranked_bar_chart(sub_df, metric, chart_title, logo_map, bar_color=None):
+    """
+    Vertical bar chart for a small set of chains (top or bottom N).
+    Each x-axis position shows either the chain's logo (if found)
+    or its name as text — never both.
+    """
 
-    "Inflow Volume":
-        "#16A34A",
+    chains = sub_df["Chain"].tolist()
 
-    "Outflow Volume":
-        "#DC2626",
+    values = sub_df[metric].tolist()
 
-    "Internal Transfer Volume":
-        "#EAB308",
+    logos = [
+        find_chain_logo(chain, logo_map)
+        for chain in chains
+    ]
 
-    "Total Transfer Volume":
-        "#2563EB",
+    show_sign = (metric == "Net Flow")
 
-    "Net Flow":
-        "#111111"
-}
+    value_labels = [
+        format_volume(v, show_sign=show_sign)
+        for v in values
+    ]
 
-
-# =========================================================
-# CREATE HORIZONTAL BAR CHART
-# =========================================================
-
-fig = go.Figure()
-
-
-for metric in selected_metrics:
-
-    # Original values
-    original_values = (
-        chain_metrics[metric]
-        .copy()
-    )
-
-    # -----------------------------------------------------
-    # Outflow displayed on the negative side
-    # -----------------------------------------------------
-
-    if metric == "Outflow Volume":
-
-        plot_values = -original_values
-
-    else:
-
-        plot_values = original_values
-
-    # -----------------------------------------------------
-    # Labels displayed on bars
-    # -----------------------------------------------------
+    hover_labels = [
+        f"{chain.title()}<br>{metric}: {format_volume(v, show_sign=show_sign)}"
+        for chain, v in zip(chains, values)
+    ]
 
     if metric == "Net Flow":
 
-        labels = [
-
-            format_volume(
-                value,
-                show_sign=True
-            )
-
-            for value in original_values
-
+        bar_colors = [
+            POSITIVE_COLOR if v >= 0 else NEGATIVE_COLOR
+            for v in values
         ]
 
     else:
 
-        labels = [
+        bar_colors = bar_color
 
-            format_volume(
-                value
-            )
+    x_positions = list(
+        range(len(chains))
+    )
 
-            for value in original_values
-
-        ]
-
-    # -----------------------------------------------------
-    # Add trace
-    # -----------------------------------------------------
-
-    fig.add_trace(
+    fig = go.Figure(
 
         go.Bar(
 
-            y=chain_metrics["Chain"],
+            x=x_positions,
 
-            x=plot_values,
-
-            name=metric,
-
-            orientation="h",
+            y=values,
 
             marker=dict(
-
-                color=metric_colors[
-                    metric
-                ]
-
+                color=bar_colors
             ),
 
-            text=labels,
+            text=value_labels,
 
-            textposition="auto",
+            textposition="outside",
 
             textfont=dict(
                 size=11
             ),
 
-            customdata=original_values,
+            hovertext=hover_labels,
 
-            hovertemplate=(
+            hoverinfo="text"
+        )
+    )
 
-                "<b>%{y}</b><br>"
+    # Tick text is empty wherever a logo will be drawn instead.
+    tick_text = [
+        "" if logo else chain.title()
+        for logo, chain in zip(logos, chains)
+    ]
 
-                + metric
+    fig.update_layout(
 
-                + ": $%{customdata:,.2f}"
+        title=dict(
+            text=chart_title,
+            x=0.5,
+            xanchor="center",
+            font=dict(size=13)
+        ),
 
-                + "<extra></extra>"
+        xaxis=dict(
+            tickmode="array",
+            tickvals=x_positions,
+            ticktext=tick_text,
+            tickangle=0
+        ),
+
+        yaxis=dict(
+            title=metric,
+            tickformat="~s",
+            zeroline=True,
+            zerolinewidth=1,
+            zerolinecolor="#999999"
+        ),
+
+        height=380,
+
+        margin=dict(
+            l=40,
+            r=20,
+            t=50,
+            b=90
+        ),
+
+        showlegend=False,
+
+        plot_bgcolor="rgba(0,0,0,0)",
+
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
+
+    # Draw a logo image under each x position that has one.
+    for x_pos, logo_url in zip(x_positions, logos):
+
+        if not logo_url:
+            continue
+
+        fig.add_layout_image(
+
+            dict(
+
+                source=logo_url,
+
+                xref="x",
+
+                yref="paper",
+
+                x=x_pos,
+
+                y=-0.10,
+
+                sizex=0.7,
+
+                sizey=0.22,
+
+                xanchor="center",
+
+                yanchor="top",
+
+                layer="above"
             )
         )
-    )
+
+    return fig
 
 
-# =========================================================
-# CHART LAYOUT
-# =========================================================
+def render_top_bottom_row(metric, chain_metrics_df, logo_map, n=10):
 
-# Extra left margin to make room for the chain logos that get
-# drawn to the left of the y-axis tick labels below.
-LEFT_MARGIN_PX = 170
+    bar_color = METRIC_COLORS.get(metric)
 
-fig.update_layout(
+    top_df = chain_metrics_df.nlargest(
+        n,
+        metric
+    ).reset_index(drop=True)
 
-    barmode="group",
+    bottom_df = chain_metrics_df.nsmallest(
+        n,
+        metric
+    ).sort_values(
+        metric,
+        ascending=True
+    ).reset_index(drop=True)
 
-    height=max(
-        600,
-        len(chain_metrics) * 32
-    ),
+    col_top, col_bottom = st.columns(2)
 
-    title=dict(
+    with col_top:
 
-        text=(
-            f"Chain Transfer Volume — "
-            f"{time_range.upper()}"
-        ),
-
-        x=0.5,
-
-        xanchor="center"
-    ),
-
-    xaxis=dict(
-
-        title="Volume",
-
-        zeroline=True,
-
-        zerolinewidth=2,
-
-        zerolinecolor="#333333",
-
-        tickformat="~s",
-
-        showgrid=True,
-
-        gridcolor="rgba(0,0,0,0.08)"
-    ),
-
-    yaxis=dict(
-
-        title="",
-
-        categoryorder="array",
-
-        categoryarray=(
-            chain_metrics[
-                "Chain"
-            ].tolist()
-        ),
-
-        autorange="reversed",
-
-        # Push tick labels away from the axis line so the
-        # logo images (placed further left) don't overlap them.
-        ticksuffix="   "
-    ),
-
-    legend=dict(
-
-        orientation="h",
-
-        yanchor="bottom",
-
-        y=1.02,
-
-        xanchor="center",
-
-        x=0.5
-    ),
-
-    plot_bgcolor="rgba(0,0,0,0)",
-
-    paper_bgcolor="rgba(0,0,0,0)",
-
-    margin=dict(
-
-        l=LEFT_MARGIN_PX,
-
-        r=20,
-
-        t=100,
-
-        b=40
-    ),
-
-    hovermode="closest"
-)
-
-
-# =========================================================
-# ADD CHAIN LOGOS NEXT TO CHAIN NAMES
-# =========================================================
-
-# Plotly can't embed images directly inside axis tick labels,
-# so each logo is drawn as a small floating image anchored to
-# its chain's row on the y-axis (yref="y") and positioned in
-# the left margin using paper coordinates (xref="paper").
-
-LOGO_SIZE_FRACTION = 0.035   # width, as a fraction of plot width
-LOGO_X_POSITION = -0.02      # just left of the plot area (paper coords)
-
-for chain_name in chain_metrics["Chain"]:
-
-    logo_url = find_chain_logo(
-        chain_name,
-        chain_logo_map
-    )
-
-    if not logo_url:
-        # No matching logo found -> leave it empty, as requested
-        continue
-
-    fig.add_layout_image(
-
-        dict(
-
-            source=logo_url,
-
-            xref="paper",
-
-            yref="y",
-
-            x=LOGO_X_POSITION,
-
-            y=chain_name,
-
-            sizex=LOGO_SIZE_FRACTION,
-
-            sizey=0.8,
-
-            xanchor="right",
-
-            yanchor="middle",
-
-            layer="above"
+        fig_top = build_ranked_bar_chart(
+            top_df,
+            metric,
+            f"Top 10 — {metric}",
+            logo_map,
+            bar_color=bar_color
         )
-    )
+
+        st.plotly_chart(
+            fig_top,
+            use_container_width=True
+        )
+
+    with col_bottom:
+
+        fig_bottom = build_ranked_bar_chart(
+            bottom_df,
+            metric,
+            f"Bottom 10 — {metric}",
+            logo_map,
+            bar_color=bar_color
+        )
+
+        st.plotly_chart(
+            fig_bottom,
+            use_container_width=True
+        )
 
 
 # =========================================================
-# DISPLAY CHART
+# TOP 10 / BOTTOM 10 ROWS — ONE ROW PER METRIC
 # =========================================================
 
-st.plotly_chart(
+st.markdown("---")
 
-    fig,
-
-    use_container_width=True
+st.markdown(
+    "### 🏆 Top & Bottom Chains by Metric"
 )
+
+for metric in METRIC_COLUMNS:
+
+    render_top_bottom_row(
+        metric,
+        chain_metrics,
+        chain_logo_map,
+        n=10
+    )
