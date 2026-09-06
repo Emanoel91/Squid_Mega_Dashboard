@@ -471,11 +471,11 @@ VOLUME_NAMES = {
 }
 
 TRANSACTION_NAMES = {
-    "inflow": "Inflow Transaction",
-    "outflow": "Outflow Transaction",
-    "internal": "Internal Swap",
-    "total": "Total Transaction",
-    "net": "Net Flow Transaction",
+    "inflow": "Inflow Transactions",
+    "outflow": "Outflow Transactions",
+    "internal": "Internal Swaps",
+    "total": "Total Transactions",
+    "net": "Net Flow Transactions",
 }
 
 
@@ -607,24 +607,24 @@ VOLUME_METRIC_COLORS = {
     "Total Volume": "#2563EB",
 }
 
-# Bar color per transaction metric (Net Flow Transaction is colored
+# Bar color per transaction metric (Net Flow Transactions is colored
 # by sign instead).
 TRANSACTION_METRIC_COLORS = {
-    "Inflow Transaction": "#16A34A",
-    "Outflow Transaction": "#DC2626",
-    "Internal Swap": "#EAB308",
-    "Total Transaction": "#2563EB",
+    "Inflow Transactions": "#16A34A",
+    "Outflow Transactions": "#DC2626",
+    "Internal Swaps": "#EAB308",
+    "Total Transactions": "#2563EB",
 }
 
 # Each row below pairs a volume metric with its transaction-count
 # counterpart: left chart = top 10 by volume metric,
 # right chart = top 10 by the matching transaction metric.
 ROW_METRIC_PAIRS = [
-    ("Inflow Volume", "Inflow Transaction"),
-    ("Outflow Volume", "Outflow Transaction"),
-    ("Net Flow", "Net Flow Transaction"),
-    ("Total Volume", "Total Transaction"),
-    ("Internal Swap Volume", "Internal Swap"),
+    ("Inflow Volume", "Inflow Transactions"),
+    ("Outflow Volume", "Outflow Transactions"),
+    ("Net Flow", "Net Flow Transactions"),
+    ("Total Volume", "Total Transactions"),
+    ("Internal Swap Volume", "Internal Swaps"),
 ]
 
 
@@ -862,14 +862,14 @@ render_metrics_table(
     chain_tx_metrics,
     chain_logo_map,
     value_columns=[
-        "Inflow Transaction",
-        "Outflow Transaction",
-        "Internal Swap",
-        "Total Transaction",
-        "Net Flow Transaction"
+        "Inflow Transactions",
+        "Outflow Transactions",
+        "Internal Swaps",
+        "Total Transactions",
+        "Net Flow Transactions"
     ],
-    net_flow_column="Net Flow Transaction",
-    sort_column="Total Transaction",
+    net_flow_column="Net Flow Transactions",
+    sort_column="Total Transactions",
     value_formatter=format_count
 )
 
