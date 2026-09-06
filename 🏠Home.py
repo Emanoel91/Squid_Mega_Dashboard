@@ -142,6 +142,58 @@ CHAIN_NAME_ALIASES = {
     "xdai": "xdai",
 }
 
+# Logos supplied directly by the user for chains that neither
+# CoinGecko nor LI.FI had. These always win over anything fetched
+# from those sources — they're checked first in find_chain_logo.
+# Keys are matched loosely (spaces/dashes/underscores ignored,
+# case-insensitive), so "Unknown Zone" and "unknownzone" both work.
+MANUAL_CHAIN_LOGO_OVERRIDES = {
+    "lava": "https://s2.coinmarketcap.com/static/img/coins/64x64/32722.png",
+    "xion": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/xion.webp",
+    "c4e": "https://s2.coinmarketcap.com/static/img/coins/64x64/22633.png",
+    "umee": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/umee.webp",
+    "agoric": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/agoric.webp",
+    "nolus": "https://s2.coinmarketcap.com/static/img/coins/64x64/28485.png",
+    "jackal": "https://s2.coinmarketcap.com/static/img/coins/64x64/25261.png",
+    "unknown zone": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
+    "carbon": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/carbon.webp",
+    "acre": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/acre.webp",
+    "fetch": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/fetch.webp",
+    "sentinel": "https://s2.coinmarketcap.com/static/img/coins/64x64/2643.png",
+    "humanai": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/humans.webp",
+    "decentr": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/decentr.webp",
+    "bitsong": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/bitsong.webp",
+    "ngmi": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
+    "quicksilver": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/quicksilver.webp",
+    "cheqd": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/cheqd.webp",
+    "flippandomainnet": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
+    "quasar": "https://s2.coinmarketcap.com/static/img/coins/64x64/27607.png",
+    "dchain": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
+    "digchain": "https://s2.coinmarketcap.com/static/img/coins/64x64/17748.png",
+    "impacthub": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/impacthub.webp",
+    "nirvana": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
+}
+
+
+def _normalize_lookup_key(value):
+    """Lowercase + strip spaces/dashes/underscores, for loose matching."""
+
+    return (
+        str(value)
+        .strip()
+        .lower()
+        .replace(" ", "")
+        .replace("-", "")
+        .replace("_", "")
+    )
+
+
+# Pre-normalized version of the manual overrides, built once.
+_NORMALIZED_MANUAL_OVERRIDES = {
+    _normalize_lookup_key(name): url
+    for name, url in MANUAL_CHAIN_LOGO_OVERRIDES.items()
+}
+
 
 def _fetch_coingecko_logo_map():
 
@@ -274,17 +326,23 @@ def find_chain_logo(chain_name, logo_map):
     if not key:
         return ""
 
-    # 1) exact match
+    # 1) manual overrides always win (user-supplied, highest confidence)
+    normalized_key = _normalize_lookup_key(chain_name)
+
+    if normalized_key in _NORMALIZED_MANUAL_OVERRIDES:
+        return _NORMALIZED_MANUAL_OVERRIDES[normalized_key]
+
+    # 2) exact match
     if key in logo_map:
         return logo_map[key]
 
-    # 2) known alias match
+    # 3) known alias match
     alias = CHAIN_NAME_ALIASES.get(key)
 
     if alias and alias in logo_map:
         return logo_map[alias]
 
-    # 3) loose match (handles minor naming differences,
+    # 4) loose match (handles minor naming differences,
     #    e.g. "polygon" vs "polygon-pos")
     for name_key, url in logo_map.items():
 
