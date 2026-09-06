@@ -952,7 +952,7 @@ def build_ranked_bar_chart(
             textposition="outside",
 
             textfont=dict(
-                size=11
+                size=15
             ),
 
             hovertext=hover_labels,
@@ -973,7 +973,7 @@ def build_ranked_bar_chart(
             text=chart_title,
             x=0.5,
             xanchor="center",
-            font=dict(size=13)
+            font=dict(size=17)
         ),
 
         xaxis=dict(
