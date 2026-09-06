@@ -658,48 +658,51 @@ METRIC_DEFINITIONS = {
 
 
 # =========================================================
-# METRIC GLOSSARY (collapsible reference for the whole page)
+# METRIC GLOSSARY (collapsible reference — rendered at the
+# bottom of the page, see call near the end of the script)
 # =========================================================
 
-with st.expander("ℹ️ Metric Definitions"):
+def render_metric_glossary():
 
-    volume_metric_names = [
-        "Inflow Volume",
-        "Outflow Volume",
-        "Internal Swap Volume",
-        "Total Volume",
-        "Net Flow"
-    ]
+    with st.expander("ℹ️ Metric Definitions"):
 
-    transaction_metric_names = [
-        "Inflow Transactions",
-        "Outflow Transactions",
-        "Internal Swaps",
-        "Total Transactions",
-        "Net Flow Transactions"
-    ]
+        volume_metric_names = [
+            "Inflow Volume",
+            "Outflow Volume",
+            "Internal Swap Volume",
+            "Total Volume",
+            "Net Flow"
+        ]
 
-    glossary_col_volume, glossary_col_tx = st.columns(2)
+        transaction_metric_names = [
+            "Inflow Transactions",
+            "Outflow Transactions",
+            "Internal Swaps",
+            "Total Transactions",
+            "Net Flow Transactions"
+        ]
 
-    with glossary_col_volume:
+        glossary_col_volume, glossary_col_tx = st.columns(2)
 
-        st.markdown("**Volume metrics**")
+        with glossary_col_volume:
 
-        for name in volume_metric_names:
+            st.markdown("**Volume metrics**")
 
-            st.markdown(
-                f"- **{name}** — {METRIC_DEFINITIONS[name]}"
-            )
+            for name in volume_metric_names:
 
-    with glossary_col_tx:
+                st.markdown(
+                    f"- **{name}** — {METRIC_DEFINITIONS[name]}"
+                )
 
-        st.markdown("**Transaction metrics**")
+        with glossary_col_tx:
 
-        for name in transaction_metric_names:
+            st.markdown("**Transaction metrics**")
 
-            st.markdown(
-                f"- **{name}** — {METRIC_DEFINITIONS[name]}"
-            )
+            for name in transaction_metric_names:
+
+                st.markdown(
+                    f"- **{name}** — {METRIC_DEFINITIONS[name]}"
+                )
 
 
 # =========================================================
@@ -970,12 +973,14 @@ def build_ranked_bar_chart(
     chart_title,
     logo_map,
     bar_color,
-    value_formatter
+    value_formatter,
+    subtitle=""
 ):
     """
     Vertical bar chart for a small set of chains (e.g. top 10).
     Each x-axis position shows either the chain's logo (if found)
-    or its name as text — never both.
+    or its name as text — never both. `subtitle` (if given) is
+    rendered as a small line directly under the chart title.
     """
 
     chains = sub_df["Chain"].tolist()
@@ -1046,10 +1051,22 @@ def build_ranked_bar_chart(
         for logo, chain in zip(logos, chains)
     ]
 
+    # Title text with an optional small subtitle line underneath it,
+    # carrying the metric's plain-language definition.
+    title_html = f"<b>{chart_title}</b>"
+
+    if subtitle:
+
+        title_html += (
+            "<br><span style='font-size:10.5px; "
+            "font-weight:normal; color:#666666'>"
+            f"{subtitle}</span>"
+        )
+
     fig.update_layout(
 
         title=dict(
-            text=chart_title,
+            text=title_html,
             x=0.5,
             xanchor="center",
             font=dict(size=13)
@@ -1075,7 +1092,7 @@ def build_ranked_bar_chart(
         margin=dict(
             l=40,
             r=20,
-            t=50,
+            t=76,
             b=90
         ),
 
@@ -1154,16 +1171,13 @@ def render_top_pair_row(
             f"Top 10 — {volume_metric}",
             logo_map,
             bar_color=vol_color,
-            value_formatter=format_volume
+            value_formatter=format_volume,
+            subtitle=METRIC_DEFINITIONS.get(volume_metric, "")
         )
 
         st.plotly_chart(
             fig_volume,
             use_container_width=True
-        )
-
-        st.caption(
-            METRIC_DEFINITIONS.get(volume_metric, "")
         )
 
     with col_right:
@@ -1174,16 +1188,13 @@ def render_top_pair_row(
             f"Top 10 — {transaction_metric}",
             logo_map,
             bar_color=tx_color,
-            value_formatter=format_count
+            value_formatter=format_count,
+            subtitle=METRIC_DEFINITIONS.get(transaction_metric, "")
         )
 
         st.plotly_chart(
             fig_tx,
             use_container_width=True
-        )
-
-        st.caption(
-            METRIC_DEFINITIONS.get(transaction_metric, "")
         )
 
 
@@ -1207,3 +1218,12 @@ for volume_metric, transaction_metric in ROW_METRIC_PAIRS:
         chain_logo_map,
         n=10
     )
+
+
+# =========================================================
+# METRIC GLOSSARY — RENDERED AT THE BOTTOM OF THE PAGE
+# =========================================================
+
+st.markdown("---")
+
+render_metric_glossary()
