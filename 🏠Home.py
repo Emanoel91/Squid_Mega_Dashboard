@@ -649,8 +649,8 @@ time_range = st.selectbox(
         "7d",
         "30d",
         "90d",
-        "1y",
         "ytd",
+        "1y",
         "all"
     ],
     index=1,
