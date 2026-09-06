@@ -627,12 +627,87 @@ ROW_METRIC_PAIRS = [
     ("Internal Swap Volume", "Internal Swaps"),
 ]
 
+# Plain-language definition for every metric shown in the tables and
+# charts. Used both as column-header tooltips (st.column_config help)
+# and as small captions under each chart, so the audience never has
+# to guess what a number represents.
+METRIC_DEFINITIONS = {
+    "Inflow Volume":
+        "The total value of assets transferred into the chain.",
+    "Outflow Volume":
+        "The total value of assets transferred out of the chain.",
+    "Internal Swap Volume":
+        "The total value of asset swaps executed within the same chain.",
+    "Total Volume":
+        "The combined value of inflows, outflows, and internal swaps.",
+    "Net Flow":
+        "The net value of assets entering or leaving the chain, "
+        "calculated as inflow volume minus outflow volume.",
+    "Inflow Transactions":
+        "The total number of transactions transferring assets into the chain.",
+    "Outflow Transactions":
+        "The total number of transactions transferring assets out of the chain.",
+    "Internal Swaps":
+        "The total number of asset swap transactions executed within the same chain.",
+    "Total Transactions":
+        "The combined number of inflow, outflow, and internal swap transactions.",
+    "Net Flow Transactions":
+        "The net number of inflow and outflow transactions, calculated as "
+        "inflow transactions minus outflow transactions.",
+}
+
+
+# =========================================================
+# METRIC GLOSSARY (collapsible reference for the whole page)
+# =========================================================
+
+with st.expander("ℹ️ Metric Definitions"):
+
+    volume_metric_names = [
+        "Inflow Volume",
+        "Outflow Volume",
+        "Internal Swap Volume",
+        "Total Volume",
+        "Net Flow"
+    ]
+
+    transaction_metric_names = [
+        "Inflow Transactions",
+        "Outflow Transactions",
+        "Internal Swaps",
+        "Total Transactions",
+        "Net Flow Transactions"
+    ]
+
+    glossary_col_volume, glossary_col_tx = st.columns(2)
+
+    with glossary_col_volume:
+
+        st.markdown("**Volume metrics**")
+
+        for name in volume_metric_names:
+
+            st.markdown(
+                f"- **{name}** — {METRIC_DEFINITIONS[name]}"
+            )
+
+    with glossary_col_tx:
+
+        st.markdown("**Transaction metrics**")
+
+        for name in transaction_metric_names:
+
+            st.markdown(
+                f"- **{name}** — {METRIC_DEFINITIONS[name]}"
+            )
+
 
 # =========================================================
 # TIME RANGE FILTER
 # =========================================================
 
 st.markdown("---")
+
 
 st.markdown(
     "### 📅 Time Range"
@@ -810,17 +885,28 @@ def render_metrics_table(
         subset=other_columns
     )
 
+    column_config = {
+        "Logo": st.column_config.ImageColumn(
+            "Logo",
+            width="small"
+        ),
+        "Chain": st.column_config.TextColumn(
+            "Chain"
+        )
+    }
+
+    for col in value_columns:
+
+        definition = METRIC_DEFINITIONS.get(col)
+
+        column_config[col] = st.column_config.Column(
+            col,
+            help=definition
+        )
+
     st.dataframe(
         styler,
-        column_config={
-            "Logo": st.column_config.ImageColumn(
-                "Logo",
-                width="small"
-            ),
-            "Chain": st.column_config.TextColumn(
-                "Chain"
-            )
-        },
+        column_config=column_config,
         hide_index=True,
         use_container_width=True
     )
@@ -1076,6 +1162,10 @@ def render_top_pair_row(
             use_container_width=True
         )
 
+        st.caption(
+            METRIC_DEFINITIONS.get(volume_metric, "")
+        )
+
     with col_right:
 
         fig_tx = build_ranked_bar_chart(
@@ -1090,6 +1180,10 @@ def render_top_pair_row(
         st.plotly_chart(
             fig_tx,
             use_container_width=True
+        )
+
+        st.caption(
+            METRIC_DEFINITIONS.get(transaction_metric, "")
         )
 
 
