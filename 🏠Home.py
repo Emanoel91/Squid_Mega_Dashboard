@@ -466,14 +466,14 @@ VOLUME_NAMES = {
     "inflow": "Inflow Volume",
     "outflow": "Outflow Volume",
     "internal": "Internal Swap Volume",
-    "total": "Total Transfer Volume",
+    "total": "Total Volume",
     "net": "Net Flow",
 }
 
 TRANSACTION_NAMES = {
     "inflow": "Inflow Transaction",
     "outflow": "Outflow Transaction",
-    "internal": "Internal Transaction",
+    "internal": "Internal Swap",
     "total": "Total Transaction",
     "net": "Net Flow Transaction",
 }
@@ -604,7 +604,7 @@ VOLUME_METRIC_COLORS = {
     "Inflow Volume": "#16A34A",
     "Outflow Volume": "#DC2626",
     "Internal Swap Volume": "#EAB308",
-    "Total Transfer Volume": "#2563EB",
+    "Total Volume": "#2563EB",
 }
 
 # Bar color per transaction metric (Net Flow Transaction is colored
@@ -612,7 +612,7 @@ VOLUME_METRIC_COLORS = {
 TRANSACTION_METRIC_COLORS = {
     "Inflow Transaction": "#16A34A",
     "Outflow Transaction": "#DC2626",
-    "Internal Transaction": "#EAB308",
+    "Internal Swap": "#EAB308",
     "Total Transaction": "#2563EB",
 }
 
@@ -623,8 +623,8 @@ ROW_METRIC_PAIRS = [
     ("Inflow Volume", "Inflow Transaction"),
     ("Outflow Volume", "Outflow Transaction"),
     ("Net Flow", "Net Flow Transaction"),
-    ("Total Transfer Volume", "Total Transaction"),
-    ("Internal Swap Volume", "Internal Transaction"),
+    ("Total Volume", "Total Transaction"),
+    ("Internal Swap Volume", "Internal Swap"),
 ]
 
 
@@ -841,11 +841,11 @@ render_metrics_table(
         "Inflow Volume",
         "Outflow Volume",
         "Internal Swap Volume",
-        "Total Transfer Volume",
+        "Total Volume",
         "Net Flow"
     ],
     net_flow_column="Net Flow",
-    sort_column="Total Transfer Volume",
+    sort_column="Total Volume",
     value_formatter=format_volume
 )
 
@@ -864,7 +864,7 @@ render_metrics_table(
     value_columns=[
         "Inflow Transaction",
         "Outflow Transaction",
-        "Internal Transaction",
+        "Internal Swap",
         "Total Transaction",
         "Net Flow Transaction"
     ],
