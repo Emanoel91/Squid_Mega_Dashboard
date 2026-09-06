@@ -169,11 +169,6 @@ MANUAL_CHAIN_LOGO_OVERRIDES = {
     "flippandomainnet": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
     "quasar": "https://s2.coinmarketcap.com/static/img/coins/64x64/27607.png",
     "dchain": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
-    "dig": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
-    "747": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
-    "98866": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
-    "hub": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
-    "maria": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
     "digchain": "https://s2.coinmarketcap.com/static/img/coins/64x64/17748.png",
     "impacthub": "https://raw.githubusercontent.com/0xsquid/assets/main/images/webp128/chains/impacthub.webp",
     "nirvana": "https://s2.coinmarketcap.com/static/img/coins/64x64/27561.png",
@@ -470,7 +465,7 @@ def _aggregate_chain_metrics(df, value_col, names):
 VOLUME_NAMES = {
     "inflow": "Inflow Volume",
     "outflow": "Outflow Volume",
-    "internal": "Internal Transfer Volume",
+    "internal": "Internal Swap Volume",
     "total": "Total Transfer Volume",
     "net": "Net Flow",
 }
@@ -608,7 +603,7 @@ NEUTRAL_TEXT_COLOR = "#111111"
 VOLUME_METRIC_COLORS = {
     "Inflow Volume": "#16A34A",
     "Outflow Volume": "#DC2626",
-    "Internal Transfer Volume": "#EAB308",
+    "Internal Swap Volume": "#EAB308",
     "Total Transfer Volume": "#2563EB",
 }
 
@@ -629,7 +624,7 @@ ROW_METRIC_PAIRS = [
     ("Outflow Volume", "Outflow Transaction"),
     ("Net Flow", "Net Flow Transaction"),
     ("Total Transfer Volume", "Total Transaction"),
-    ("Internal Transfer Volume", "Internal Transaction"),
+    ("Internal Swap Volume", "Internal Transaction"),
 ]
 
 
@@ -649,8 +644,6 @@ time_range = st.selectbox(
         "7d",
         "30d",
         "90d",
-        "ytd",
-        "1y",
         "all"
     ],
     index=1,
@@ -838,7 +831,7 @@ def render_metrics_table(
 # =========================================================
 
 st.markdown(
-    "### 💸 All Chains — Full Metrics (Volume)"
+    "### 📋 All Chains — Full Metrics"
 )
 
 render_metrics_table(
@@ -847,7 +840,7 @@ render_metrics_table(
     value_columns=[
         "Inflow Volume",
         "Outflow Volume",
-        "Internal Transfer Volume",
+        "Internal Swap Volume",
         "Total Transfer Volume",
         "Net Flow"
     ],
@@ -862,7 +855,7 @@ render_metrics_table(
 # =========================================================
 
 st.markdown(
-    "### 🚀 All Chains — Full Metrics (Transactions)"
+    "### 📋 All Chains — Full Metrics (Transactions)"
 )
 
 render_metrics_table(
@@ -952,7 +945,7 @@ def build_ranked_bar_chart(
             textposition="outside",
 
             textfont=dict(
-                size=15
+                size=11
             ),
 
             hovertext=hover_labels,
@@ -973,7 +966,7 @@ def build_ranked_bar_chart(
             text=chart_title,
             x=0.5,
             xanchor="center",
-            font=dict(size=17)
+            font=dict(size=13)
         ),
 
         xaxis=dict(
