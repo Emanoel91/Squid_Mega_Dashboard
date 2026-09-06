@@ -836,7 +836,7 @@ def render_metrics_table(
 # =========================================================
 
 st.markdown(
-    "### 📋 All Chains — Full Metrics"
+    "### 💸 All Chains — Full Metrics (Volume)"
 )
 
 render_metrics_table(
@@ -860,7 +860,7 @@ render_metrics_table(
 # =========================================================
 
 st.markdown(
-    "### 📋 All Chains — Full Metrics (Transactions)"
+    "### 🚀 All Chains — Full Metrics (Transactions)"
 )
 
 render_metrics_table(
