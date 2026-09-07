@@ -33,14 +33,21 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- Builder Info ---------------------------------------------------------------------------------------------------------
 st.markdown(
     """
-    <div style="margin-top: 20px; margin-bottom: 20px; font-size: 16px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <img src="https://pbs.twimg.com/profile_images/2060406047391559681/sA9zPNKM_400x400.jpg" style="width:25px; height:25px; border-radius: 50%;">
-            <span>Built by: <a href="https://x.com/0xeman_raz" target="_blank">Eman Raz</a></span>
-        </div>
+    <div style="
+        background-color:#FFE066;
+        color:#000000;
+        padding:14px 18px;
+        border-radius:8px;
+        margin-top:14px;
+        font-size:15px;
+        line-height:1.5;
+    ">
+        This dashboard tracks Squid's cross-chain swap activity: transfer
+        volume and transaction counts flowing into, out of, and within each
+        chain, plus which chains lead on each metric — all filterable by
+        time range.
     </div>
     """,
     unsafe_allow_html=True
