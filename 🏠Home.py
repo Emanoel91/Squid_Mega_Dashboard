@@ -53,6 +53,22 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+st.markdown(
+    """
+    <div style="margin-top:10px; font-size:14px;">
+        <a href="https://www.squidrouter.com/" target="_blank"
+           style="text-decoration:none; color:#111111; margin-right:20px;">
+            🌐 Squid Website
+        </a>
+        <a href="https://x.com/squidrouter" target="_blank"
+           style="text-decoration:none; color:#111111;">
+            🐦 Squid X Account
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 
 # =========================================================
 # API CONFIGURATION
