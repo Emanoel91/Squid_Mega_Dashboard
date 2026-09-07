@@ -747,22 +747,20 @@ def render_metric_glossary():
 
 st.markdown("---")
 
+time_range_col, _ = st.columns([1, 3])
 
-st.markdown(
-    "### 📅 Time Range"
-)
+with time_range_col:
 
-time_range = st.selectbox(
-    "Select time range",
-    options=[
-        "7d",
-        "30d",
-        "90d",
-        "all"
-    ],
-    index=1,
-    label_visibility="collapsed"
-)
+    time_range = st.selectbox(
+        "Select time range:",
+        options=[
+            "7d",
+            "30d",
+            "90d",
+            "all"
+        ],
+        index=1
+    )
 
 
 # =========================================================
