@@ -755,10 +755,8 @@ with time_range_col:
         "Select time range:",
         options=[
             "7d",
-            "mtd",
             "30d",
             "90d",
-            "qtd",
             "ytd",
             "1y",
             "all"
