@@ -3,22 +3,10 @@ import requests
 import pandas as pd
 import plotly.graph_objects as go
 
+# ========================================================= PAGE CONFIG =========================================================
+st.set_page_config(page_title="Squid", page_icon="https://axelarscan.io/logos/accounts/squid.svg", layout="wide")
 
-# =========================================================
-# PAGE CONFIG
-# =========================================================
-
-st.set_page_config(
-    page_title="Squid",
-    page_icon="https://axelarscan.io/logos/accounts/squid.svg",
-    layout="wide"
-)
-
-
-# =========================================================
-# TITLE WITH LOGO
-# =========================================================
-
+# ========================================================= TITLE WITH LOGO =====================================================
 st.markdown(
     """
     <div style="display: flex; align-items: center; gap: 15px;">
@@ -69,14 +57,8 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
-# =========================================================
-# API CONFIGURATION
-# =========================================================
-
-BASE_API_URL = (
-    "https://www.squidrouter.com/api/analytics/routes"
-)
+# ========================================================= API CONFIGURATION =========================================================
+BASE_API_URL = ("https://www.squidrouter.com/api/analytics/routes")
 
 # The route-level field that holds the number of transactions for
 # that source/destination pair. The API's exact field name isn't
@@ -106,49 +88,32 @@ COINGECKO_PLATFORMS_URL = (
 
 LIFI_CHAINS_URL = "https://li.quest/v1/chains"
 
-
-# =========================================================
-# LOAD DATA FROM API
-# =========================================================
-
+# ========================================================= LOAD DATA FROM API =========================================================
 @st.cache_data(ttl=300)
 def get_route_data(time_range):
-
     response = requests.get(
         BASE_API_URL,
         params={
             "range": time_range
         },
-        timeout=30
-    )
-
+        timeout=30)
     response.raise_for_status()
-
     result = response.json()
-
     if "data" not in result:
         raise ValueError(
-            "API response does not contain 'data'."
-        )
-
+            "API response does not contain 'data'.")
     df = pd.DataFrame(result["data"])
-
     return df
-
 
 def detect_transaction_field(df):
     """
     Returns the first column name (from TRANSACTION_COUNT_FIELD_CANDIDATES)
     that actually exists in the API response, or None if none of them do.
     """
-
     for candidate in TRANSACTION_COUNT_FIELD_CANDIDATES:
-
         if candidate in df.columns:
             return candidate
-
     return None
-
 
 # =========================================================
 # LOAD CHAIN LOGOS
