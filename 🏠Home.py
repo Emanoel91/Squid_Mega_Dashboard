@@ -757,6 +757,8 @@ with time_range_col:
             "7d",
             "30d",
             "90d",
+            "ytd",
+            "1y",
             "all"
         ],
         index=1
