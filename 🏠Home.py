@@ -1240,3 +1240,22 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+st.markdown("")
+st.markdown(
+    """
+    <!-- Support / Tips Box -->
+    <div style="
+        background-color: #F5F5F5;
+        border-left: 5px solid #888;
+        padding: 12px;
+        border-radius: 10px;
+        margin-top: 10px;
+        font-size: 15px;
+        color: #333;
+    ">
+        🎁 <b>Support / Tips:</b><br>
+        <code>0x621bd661e3d57da1c8237209824827f1027abf62</code>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
